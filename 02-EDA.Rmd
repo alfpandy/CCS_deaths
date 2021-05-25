@@ -1,0 +1,256 @@
+---
+title: "Exploratory Data Analysis"
+author: "AS"
+date: "5/21/2021"
+output:
+  bookdown::gitbook:
+    lib_dir: assets
+    split_by: section
+    config:
+      toolbar:
+        position: static
+---
+
+```{r setup, include=FALSE, message=FALSE, warning=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+# Introduction
+
+```{r libraries, message=FALSE, warning=FALSE}
+#options(tidyverse.quiet = TRUE,  warn.conflicts = FALSE)
+suppressPackageStartupMessages(library("tidyverse"))
+suppressPackageStartupMessages(library("patchwork"))
+suppressPackageStartupMessages(library("scales"))
+
+
+library(tidyverse)
+library(scales)  #wrap_format
+if(!require("patchwork")) install.packages("patchwork")
+library(patchwork)
+#library(rlang)
+load("data\\css.RData")
+source("my_functions\\my_funcs.R")
+```
+
+First of all, summaries of the combination of variables in the df_css_eng tibble are constructed.
+
+```{r summaries, message=FALSE}
+############## Summaries #########################################################################
+summ_age_year_eng <-  sum_func(age, year=as_factor(year))
+summ_age_sex_year_eng <- sum_func(age, sex, year=as_factor(year))
+summ_sex_year_eng <- sum_func(sex, year=as_factor(year))
+summ_cod_year_eng <- sum_func(cause_of_death, year=as_factor(year))
+summ_cod_sex_year_eng <- sum_func(cause_of_death, sex, year=as_factor(year))
+summ_loc_eng <-  sum_func(local_authority) %>% 
+  arrange(freq = desc(freq))
+
+summ_age_year_type <- sum_func(age, cause_of_death, year = as_factor(year))
+summ_age_year_sex_type <- sum_func(age, cause_of_death, sex, year = as_factor(year))
+summ_year_eng <-  sum_func(year = as_factor(year)) 
+
+##################################                           #####################################
+
+# filter localities differentiated by sex with deaths from hi to low 
+loc_sex <- sum_func(local_authority, sex) %>% 
+  arrange(freq = desc(freq))
+
+#top 10 localities with highest deaths either by male or female
+names_loc_sex <- loc_sex %>% 
+  head(18) %>% 
+  pull(local_authority) %>% 
+  unique()
+  
+loc_sex_top10 <- loc_sex %>% 
+  filter(local_authority %in% names_loc_sex)
+
+####################################################################################
+####### breakdown of birmingham and Cornwell
+birm <- df_css_eng %>% 
+  filter(local_authority == "Birmingham") %>% 
+   sum_func(age, sex, cause_of_death,  year=as_factor(year), data =.)
+
+corn <- df_css_eng %>% 
+  filter(local_authority == "Cornwall") %>% 
+   sum_func(age, sex, cause_of_death, year=as_factor(year), data = .)
+
+```
+
+Individual plots are constructed
+
+```{r}
+######################################################################################################
+##################### Plots ##########################################################################
+
+# bar plots
+#dodge displays distribution of css deaths per age group for the three years
+p_age <- summ_age_year_eng %>%   
+  ggplot(aes(x=age, y=freq, fill = year))+  
+  geom_bar(stat="identity", position = position_dodge())+
+  labs(x= "age group", y = "Deaths")+
+  theme_bw()+
+  theme(axis.text.x = element_text(angle = 90))
+
+p_age_sex <- summ_age_sex_year_eng %>%   
+  ggplot(aes(x=age, y=freq, fill = year))+  
+  geom_bar(stat="identity", position = position_dodge())+
+  labs(x= "age group", y = "Deaths")+
+  theme_bw()+
+  theme(axis.text.x = element_text(angle = 90))+
+  facet_wrap(vars(sex))
+
+p_log_age <- summ_age_year_eng %>%   
+  ggplot(aes(x=age, y=log(freq), fill = year))+  
+  geom_bar(stat="identity", position = position_dodge())+
+  labs(x= "age group", y = "log Deaths",
+       title = "log Deaths per age group in England and Wales")+
+  theme_bw()+
+  theme(axis.text.x = element_text(angle = 90),
+        axis.text.y = element_blank())
+
+p_type <- summ_cod_year_eng %>%   
+  ggplot(aes(x=cause_of_death, y=freq, fill = year))+  
+  geom_bar(stat="identity", position = position_dodge())+
+  labs(y= "local authority", x = "Deaths")+
+  scale_x_discrete(labels = wrap_format(10))+
+  theme_bw()
+
+
+  
+p_type_sex <- summ_cod_sex_year_eng %>%   
+  ggplot(aes(x=cause_of_death, y=freq, fill = year))+  
+  geom_bar(stat="identity", position = position_dodge())+
+  labs(y= "Deaths", x = "type of death")+
+  scale_x_discrete(labels = wrap_format(10))+
+  theme_bw()+
+  facet_wrap(vars(sex))
+
+p_loc <- summ_loc_eng %>% 
+  ggplot(aes(y=fct_reorder(local_authority, freq), x=freq))+  
+  geom_bar(stat="identity")+
+  labs(y= "Deaths", x = "Deaths")+
+  theme_bw()+
+  theme(axis.text.y = element_blank())
+
+p_loc_10 <- summ_loc_eng %>% 
+  head(10) %>% 
+  ggplot(aes(x=freq, fct_reorder(local_authority, freq)))+  
+  geom_bar(stat="identity")+
+  labs(y= "", x = "Deaths")+
+  #scale_y_discrete(limits = rev)+
+   # coord_flip()
+  theme_bw()+
+  theme(axis.text.x = element_text(angle = 0))
+  
+p_loc_sex_top10 <-  loc_sex_top10 %>% 
+   ggplot(aes(x=freq, fct_reorder(local_authority, freq)))+
+   geom_bar(stat="identity")+
+  labs(y= "", x = "Deaths")+
+  #coord_flip()+
+   #scale_y_discrete(limits = rev)+
+  theme(axis.text.x = element_text(angle = 0))+
+  theme_bw()+
+   facet_wrap(vars(sex))
+
+
+```
+
+# Plots
+ 
+```{r age, fig.cap="The effect of age and sex on frequency of death "}
+p_all <- ((p_age / p_age_sex)+ plot_layout(guides="collect"))
+p_all +plot_annotation(
+  title = "Deaths in England and Wales",
+  tag_levels = "A"
+)
+```
+
+Figure \@ref(fig:age) A demonstrates that increased age is associated with increased deaths. This would be expected. Very few deaths occur before the age group 40-44. Also noted in this figure is the small decline in deaths across the older age groups from years 2012 to 2014. When stratifying by sex (figure \@ref(fig:age) B) it is interesting to note that the peak age group of male deaths is 80-84, but then there is a decline.  This may be due to a reduced male population at these age groups, and therefore less males are likely to die. 
+
+
+```{r type, fig.cap="The effect of type of death and sex on frequency of death "}
+p_type_all <- ((p_type / p_type_sex)+ plot_layout(guides="collect"))
+p_type_all +plot_annotation(
+  tag_levels = "A"
+)
+```
+
+Figure \@ref(fig:type) A demonstrates around twice the number of deaths due to cardiovascular disease than coronary heart disease, and there were fewer stroke deaths than coronary heart disease deaths.  The number of cardiovascular disease deaths in England and Wales in 2012 was slightly under 132,000.  There was a slight decrease in deaths for all groups from 2012 to 2014.  Figure \@ref(fig:type) B demonstrates an interesting feature.  Males are likely to suffer from more coronary heart disease deaths than females.  However, females are more likely to die of stroke than males.  
+
+
+```{r local, fig.cap="Local authorities with top 10 deaths in England and Wales"}
+p_loc_all <- p_loc_10/p_loc_sex_top10
+p_loc_all +
+  plot_annotation(
+    tag_levels = "A"
+  )
+```
+
+Figure \@ref(fig:local) A demonstrates the top 10 localities where deaths are highest in England and Wales.  Birmingham experienced the highest number of deaths by some margin compared to the locality with the next highest frequency of deaths, Leeds.  Surprisingly, Cornwall was the locality with the third highest number of deaths.  Stratifying these figures according to sex (figure \@ref(fig:local) B), it demonstrates that more males die in Birmingham and Leeds than females, although more females die in Cornwall than males.  
+
+```{r birm, fig.cap="Deaths in Birmingham due to the three types of diseases between sexes"}
+birm %>% 
+   ggplot(aes(y=freq, x =age))+
+   geom_bar(stat="identity")+
+  labs(y= "age group", y = "Deaths",
+       title = "Birmingham")+
+  coord_flip()+
+   scale_y_continuous(limits = c(0,1000))+
+  theme(axis.text.x = element_text(angle = 90))+
+  theme_bw()+
+   facet_grid(sex~cause_of_death, scales = "fixed")
+```
+
+```{r corn, fig.cap="Deaths in Cornwall due to the three types of diseases between sexes"}
+corn %>% 
+   ggplot(aes(y=freq, x =age))+
+   geom_bar(stat="identity")+
+  labs(y= "age group", y = "Deaths",
+       title = "Cornwall")+
+  coord_flip()+
+   scale_y_continuous(limits = c(0,1000))+
+  theme(axis.text.x = element_text(angle = 90))+
+  theme_bw()+
+    facet_grid(sex~cause_of_death, scales = "fixed")
+```
+
+The large numbers of deaths in Cornwall may be due to inadequate health services in the region.  According to figures \@ref(fig:birm) and \@ref(fig:corn), there is an increase in female deaths in Cornwall due to cardiovascular disease in the 90+ age group as compared to the cohort in Birmingham. Likewise, there is an increase in coronary heart disease and decrease in cardiovascular disease in males in Birmingham compared to Cornwall.  More deaths in the 90+ age group occur in Cornwall compared to Birmingham.
+
+One reason for the earlier age_group deaths of males in the industrial cities could be due to the historic work environments. 
+
+```{r agetypeyear, fig.cap="Deaths due to the three types of diseases investigated in England and Wales for age groups 30-34 and greater" }
+# remove age groups with low frequencies
+select_age <- summ_age_year_eng %>% 
+  select(age) %>% 
+  unique() %>% 
+  tail(13) %>% 
+  pull()
+
+p_age_type <- summ_age_year_type %>% 
+  filter(age %in% select_age) %>% 
+  ggplot(aes(x=age, y=freq, fill = year))+  
+  geom_bar(stat="identity", position = position_dodge())+
+  labs(x= "age group", y = "Deaths")+
+  theme_bw()+
+  theme(axis.text.x = element_text(angle = 90))+
+  facet_wrap(vars(cause_of_death), scales = "free_y", nrow = 3)
+
+p_age_type
+```
+
+Looking at the relationship between age group and type of death (figure \@ref(fig:agetypeyear)), it can be seen that deaths increase in an exponential manner for the age group for both cardiovascular disease and stroke.  However, it is noticeable that there is a slight decrease in deaths for coronary heart disease in the age group 90+.  When stratifying for sex, it can be seen in figure \@ref(fig:agetypesexyear) that death due to cardiovascular disease  and stroke is much greater in females than males at older age group.  This is likely due to the longer life-span of females. More males die of coronary heart disease at age groups younger than 90+, possibly due to poorer lifestyle than women.  At the age_group 90+ many more women die than men, likely due to more women living at this age.
+
+```{r agetypesexyear, fig.cap="Deaths due to disease type between sexes in England and Wales"}
+p_age_sex_type <- summ_age_year_sex_type %>% 
+  filter(age %in% select_age) %>% 
+  ggplot(aes(x=age, y=freq, fill = year))+  
+  geom_bar(stat="identity", position = position_dodge())+
+  labs(x= "age group", y = "Deaths")+
+  theme_bw()+
+  theme(axis.text.x = element_text(angle = 90))+
+  facet_grid((cause_of_death)~(sex), scales = "free_y")
+
+p_age_sex_type
+```
+
+## EDA of Rates - To do
+

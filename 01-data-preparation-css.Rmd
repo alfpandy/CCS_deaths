@@ -1,0 +1,131 @@
+---
+title: "Deaths due to cardiovascular and coronary disease and stroke"
+author: "Andrew Saul"
+date: "5/21/2021"
+output:
+  bookdown::gitbook:
+    lib_dir: assets
+    split_by: section
+    config:
+      toolbar:
+        position: static
+---
+# Background
+
+```{r setup}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+
+```{r library, echo=TRUE, warning=FALSE}
+suppressPackageStartupMessages(library("tidyverse"))
+suppressPackageStartupMessages(library("zoo"))
+
+if(!require("tidyverse")) install.packages("tidyverse")
+if(!require("zoo")) install.packages("zoo")
+
+library(tidyverse)
+library(readxl)
+library(zoo)                        # used to fill NA values with locf
+
+```
+
+
+
+This project was initiated by the author in order to demonstrate data wrangling and exploratory data analysis
+
+### Method
+Data of cardiovascular related deaths in the UK were obtained in the form of an excel spreadsheet downloaded from the source "<https://www.ons.gov.uk/peoplepopulationandcommunity/healthandsocialcare/causesofdeath/adhocs> /005268cardiovasculardiseasecoronaryheartdiseaseandstrokedeathsbylocalauthoritydeathsregistered2012to2014".
+
+The population statistics for each locality in England and Wales were also obtained in the form of an excel spreadsheet from the source "<https://data.london.gov.uk/download/ons-mid-year-population-estimates-custom-age-tables/11cff330-73d7-41ef-87c1-9b48337f98f4/ons-mye-custom-age-tool-uk-geogs-2015.xls>".
+
+In order to link the data between these two spreadsheets, only data from England and Wales were wrangled 
+
+### Stage 1
+
+The two excel files were wrangled, cleaned and merged. The code for these procedures is contained in this file "01-data-preparation-css.Rmd" and "my_functions\\my_funcs.R".
+
+### Stage 2
+
+The explanatory data analysis code (EDA) is contained in the file "02-EDA.Rmd" utilising the datasets in the file "data\\css.RData".  The purpose of this section was demonstrate the possibilites of data visualisation using various ggplot2 packages
+
+### Data wrangling, cleaning, merging and saving
+
+```{r css, echo=TRUE, message=FALSE, results="hide", warning=FALSE}
+source("my_functions\\my_funcs.R")
+##Data source directory##
+
+##excel path filename##
+path_file <- "data\\ccs.xls"
+
+#### converts all sheets in xls files to csv files and writes them to directory "\\data"
+extract_all_csvs(path_file)
+
+## create object containing paths of .csv files
+css_filenames <- c("data\\ccs_2012.csv", "data\\ccs_2013.csv", "data\\ccs_2014.csv")
+
+
+#combine CSV files together, clean data and remove rows containing NA values
+df_css <- map_dfr(css_filenames, csv_add_year) %>%   
+  map_dfr(na.locf) %>%                              # replaces NA values with cell above - required due to format of xls file
+  df_tidy()
+```
+
+The above code create a dataframe for all of UK. The population age stratification of men and women in English localities is available. By analysing ccs deaths only in English localities the rates per locality can be examined.
+
+```{r pop,  message=FALSE, results="hide", warning=FALSE}
+#filter only England entries with freq > 0
+df_css_eng <- df_css %>% 
+  filter(str_detect(la_new_code, "^E.")) %>% 
+  filter(freq > 0)
+
+#collapse ages 0-4 to combine with population tibble
+df_css_eng_collapse <- df_css_eng %>%   
+  mutate(age = fct_collapse(age, "0-4" = c("<1", "01-04"))) %>% 
+  distinct()              
+  
+
+#define pathname for population xls file
+path_file_pop <- "data\\pop_stand_2012_eng.xls"
+
+##write csv files to data\\ directory## 
+extract_all_csvs(path_file_pop)
+
+
+## create object containing paths of population .csv files
+popfilename <- c("data\\pop_stand_2012_eng_Females.csv", "data\\pop_stand_2012_eng_Males.csv")
+
+
+#tibble containing extracted data from the population excel file
+# char fields converted into factors
+df_pop <- map_dfr(popfilename, csvpopfile) %>%
+  select(-c("area")) %>% 
+  mutate(year = as.integer(year)) %>% 
+  tidy_field_type() %>% 
+  rename(la_new_code = code, age = age_group) 
+  
+
+
+################################ To Do ##################################################
+
+#change CODE  to their original values as specified in the notes of the spreadsheet using "recode" command
+
+df_pop <- df_pop %>% mutate(la_new_code = recode(la_new_code, "E06000048" = "E06000057")) %>% 
+          mutate(la_new_code = recode(la_new_code, "E08000020" = "E08000037")) %>%  
+          mutate(la_new_code = recode(la_new_code, "E07000097" = "E07000242")) %>% 
+          mutate(la_new_code = recode(la_new_code, "E07000101" = "E07000243")) %>%
+          mutate(la_new_code = recode(la_new_code, "E11000004" = "E11000007"))
+
+
+#fields Local.Authority and AREA joined to become Local.Authority
+df_deaths_pop <- left_join(df_css_eng_collapse, df_pop, by = c( "la_new_code", "age", "year", "sex" ))
+
+#check no. NA values in tibble
+#na.omit(df_deaths_pop) 
+#same number of values in tibble therefore no NA values present in df_deaths_pop
+
+save(df_css, df_css_eng, df_css_eng_collapse, df_pop, df_deaths_pop, file = "data\\css.RData" )
+```
+
+Tibbles of possible interest are saved in file "data\\css.RData". These are utilised in the Explanatory Data Analysis section
