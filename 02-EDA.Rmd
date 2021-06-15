@@ -7,8 +7,8 @@ output:
     toc: false
 ---
 
-```{r setup, include = FALSE, warning=FALSE}
-knitr::opts_chunk$set(echo = FALSE, message = FALSE)
+```{r setup, include = FALSE}
+knitr::opts_chunk$set(echo = FALSE, message = FALSE, warning=FALSE)
 ```
 # Introduction
 
@@ -68,10 +68,19 @@ loc_sex <- sum_func(local_authority, sex) %>%
   arrange(freq = desc(freq))
 
 #top 10 localities with highest deaths either by male or female
-names_loc_sex <- loc_sex %>% 
+#names of top 10 localities without discriminating by sex 
+names_loc <- summ_loc_eng |> 
+  head(10) |> 
+   pull(local_authority) 
+
+#names of top 10 localities either by male or female
+names_loc_sex <- loc_sex %>%
   head(18) %>% 
   pull(local_authority) %>% 
   unique()
+
+#no difference between the 2 sorting methods
+setdiff(names_loc, names_loc_sex)
   
 loc_sex_top10 <- loc_sex %>% 
   filter(local_authority %in% names_loc_sex)
@@ -82,7 +91,9 @@ loc_sex_top10 |>
 
 ```
 
+
 Overall Birmingham contained the largest frequency of deaths for both males and females.  For later analysis of death rates, Birmingham was used as the reference region that other local_authorities were compared against.
+
 
 ```{r}
 
@@ -212,7 +223,9 @@ birm %>%
   #coord_flip()+
    scale_y_continuous(limits = c(0,1000))+
   scale_x_discrete(breaks = c("0-4", "10-14", "20-24", "30-34", "40-44", "50-54", "60-64", "70-74", "80-84", "90+"))+
-  theme(axis.text.x = element_text(angle = 90))+
+  theme_bw()+
+  theme(strip.background = element_rect(fill = "white"),
+    axis.text.x = element_text(angle = 90))+
  # theme_bw()+
    facet_grid(sex~cause_of_death, scales = "fixed")
 ```
@@ -221,6 +234,31 @@ According to figure \@ref(fig:birm)  there were greater female deaths Birmingham
 
 One reason for the earlier age_group deaths of males in the industrial cities could be due to the historic work environments. 
 
+
+
+```{r loc-year-changes, fig.height=8, fig.cap="Changes in frequency of deaths in localities with highest amounts of deaths"}
+#summary of deaths by locality and year
+top10_loc <- df_ccs_eng_collapse |> 
+  filter(local_authority %in% names_loc) |> 
+  group_by(local_authority, year) |> 
+  summarise(freq = sum(freq))  |> 
+  mutate(local_authority = fct_recode(local_authority,"East Riding of York." = "East Riding of Yorkshire"))
+
+top10_year_p <- top10_loc |> 
+  ggplot(aes(x=year, y = freq, colour = local_authority))+
+  geom_line()+
+  scale_x_continuous(breaks = c(2012,2013,2014))+
+  scale_y_continuous(breaks = seq(1500, 4500, 1000))+
+  labs(y="Frequency")+
+  theme_bw()+
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5))+
+  facet_wrap(vars(local_authority), nrow = 5)
+  
+  top10_year_p
+
+```
+
+Figure \@ref(fig:loc-year-changes) indicates changes in deaths per year for the local_authorities with the highest frequencies of deaths. Frequencies in Birmingham, Leeds , Cheshire East and Sheffield appear to have decreased year on year.  In Durham, Cornwall and Bradford, deaths appeared to increase in 2013 but then decreased in 2014. For East Riding of Yorkshire, Kirkless and Wiltshire, death frequencies appeared stable over the three years. 
 ```{r agetypeyear, fig.height = 8, fig.cap="Deaths due to the three types of diseases investigated in England for age groups 30-34 and greater" }
 # remove age groups with low frequencies
 select_age <- summ_age_year_eng %>% 
@@ -236,7 +274,9 @@ p_age_type <- summ_age_year_type %>%
   geom_bar(stat="identity", position = position_dodge(), show.legend = FALSE)+
   labs(x= "age group", y = "Frequency ('000)")+
   theme_bw()+
-  theme(axis.text.x = element_text(angle = 90), legend.position = "top")+
+  theme(strip.background = element_rect(
+     color="black", fill="white", size=1, linetype="solid"),
+    axis.text.x = element_text(angle = 90), legend.position = "top")+
   facet_wrap(vars(cause_of_death), nrow = 3)
 
 p_age_type
