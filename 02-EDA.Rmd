@@ -7,7 +7,7 @@ output:
     toc: false
 ---
 
-```{r setup, include = FALSE}
+```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = FALSE, message = FALSE, warning=FALSE)
 ```
 # Introduction
@@ -26,7 +26,7 @@ source("my_functions\\my_funcs.R")
 ```
 
 
-Before visualising the data a check was performed to ensure all local_authority population entries in the combined population/death tibble (df_deaths_pop) contained a  value greater than 0.  There were 129 entries that contained NA values, all of which were registered for the Isle of Scilly. For each local_authority there should be 19 (age) $\times$ 3 (cause of death) $\times$ 2 (sex) $\times$ 3 (year) entries, totalling 342.  As 38% of Isle of Scilly entries were not complete, this locality was removed from analysis of EDA Rates \@ref(rates).
+Before visualising the data a check was performed to ensure all local_authority population entries in the combined population/death tibble (df_deaths_pop) contained a  value greater than 0.  <!---There were 129 entries that contained NA values, all of which were registered for the Isle of Scilly. For each local_authority there should be 19 (age) $\times$ 3 (cause of death) $\times$ 2 (sex) $\times$ 3 (year) entries, totalling 342.  As 38% of Isle of Scilly entries were not complete, this locality was removed from analysis of EDA Rates \@ref(rates).-->
 
 ```{r}
 # df_deaths_pop %>% 
@@ -80,13 +80,14 @@ names_loc_sex <- loc_sex %>%
   unique()
 
 #no difference between the 2 sorting methods
-setdiff(names_loc, names_loc_sex)
+#setdiff(names_loc, names_loc_sex)
   
 loc_sex_top10 <- loc_sex %>% 
   filter(local_authority %in% names_loc_sex)
 
 loc_sex_top10 |> 
-  knitr::kable(caption = "The top ten Local Authorities with largest overall deaths due to cardiovascular disease, coronary artery disease or stroke, stratified by sex.")
+  knitr::kable(caption = "The top ten Local Authorities with largest overall deaths due to cardiovascular disease, coronary artery disease or stroke, stratified by sex.", 
+               booktabs = TRUE, valign = 't')
 
 
 ```
@@ -234,8 +235,6 @@ According to figure \@ref(fig:birm)  there were greater female deaths Birmingham
 
 One reason for the earlier age_group deaths of males in the industrial cities could be due to the historic work environments. 
 
-
-
 ```{r loc-year-changes, fig.height=8, fig.cap="Changes in frequency of deaths in localities with highest amounts of deaths"}
 #summary of deaths by locality and year
 top10_loc <- df_ccs_eng_collapse |> 
@@ -244,7 +243,7 @@ top10_loc <- df_ccs_eng_collapse |>
   summarise(freq = sum(freq))  |> 
   mutate(local_authority = fct_recode(local_authority,"East Riding of York." = "East Riding of Yorkshire"))
 
-top10_year_p <- top10_loc |> 
+top10_loc |> 
   ggplot(aes(x=year, y = freq, colour = local_authority))+
   geom_line()+
   scale_x_continuous(breaks = c(2012,2013,2014))+
@@ -253,12 +252,168 @@ top10_year_p <- top10_loc |>
   theme_bw()+
   theme(axis.text.x = element_text(angle = 90, vjust = 0.5))+
   facet_wrap(vars(local_authority), nrow = 5)
-  
-  top10_year_p
+
 
 ```
 
 Figure \@ref(fig:loc-year-changes) indicates changes in deaths per year for the local_authorities with the highest frequencies of deaths. Frequencies in Birmingham, Leeds , Cheshire East and Sheffield appear to have decreased year on year.  In Durham, Cornwall and Bradford, deaths appeared to increase in 2013 but then decreased in 2014. For East Riding of Yorkshire, Kirkless and Wiltshire, death frequencies appeared stable over the three years. 
+
+## Raincloud plots
+Cedric Scherer has created new type of plot that encompasses useful information from a boxplot and combined it with a density and  jitter plot.  This "raincloud" plot incorporates the distribution of data seen in the density plot, but also the key summary statistics seen in the box plot and jitter plot.
+
+```{r raincloud-plots, fig.height=8, fig.cap="Raincloud plots for the distibution of deaths in localities for the three years 2012-14.  All distributions are positively skewed."}
+# raincloud plots as per 
+#https://www.cedricscherer.com/2021/06/06/visualizing-distributions-with-raincloud-plots-and-how-to-create-them-with-ggplot2/
+
+#data grouped by locality and year
+
+  
+ raincloud_data <-  
+    df_ccs_eng_collapse |> 
+  filter(freq !=0) |> 
+  group_by(year, local_authority) |> 
+  summarise(freq = sum(freq)) |> 
+  mutate(year = as.factor(year)) 
+
+
+
+#alternative to using geom_point - ggbeeswarm::geom_quasirandom() or #ggforce::geom_sina()
+
+
+
+raincloud_data |> 
+  ggplot(aes(x=year, y=freq))+
+  geom_boxplot(fill = "grey92",
+               width = 0.35, 
+               outlier.shape = NA)+
+  
+  ## add half-violin from {ggdist} package
+  ggdist::stat_halfeye(
+    ## custom bandwidth
+    adjust = .5, 
+    ## adjust height
+    width = .6, 
+    ## move geom to the right
+    justification = -.2, 
+    ## remove slab interval
+    .width = 0, 
+    point_colour = NA
+  )+
+  
+  
+  geom_point(
+    size = 1.3,
+    alpha = .3,
+    position = position_jitter(
+      seed = 1, width = .1
+    )
+  ) + 
+  coord_cartesian(xlim = c(1.2, NA), clip = "off")
+
+  
+  # ggbeeswarm::geom_quasirandom(
+  #    ## draw bigger points
+  #   size = 2,
+  #   ## add some transparency
+  #   alpha = .3,
+  #   ## add some jittering
+  #   position = position_jitter(
+  #     ## control randomness and range of jitter
+  #     seed = 1, width = .2
+  #   )
+```
+
+It can be seen from figure @\ref{fig:raincloud-plots} that data for each of the three years appears was similarly distributed. The data for each distribution was positively skewed ie. most localities had frequency values closer to 0 than the maximum value.  It was therefore worthwhile log transforming the data.
+
+ 
+```{r log-raincloud-plot, fig.height=8, fig.cap="Raincloud plots for the distibution of log deaths in localities for the three years 2012-14.  The distributions better resemble gaussian compared to the non-log deaths distributions."}
+#log_freq 
+log_raincloud_data <-  
+    df_ccs_eng_collapse |> 
+  filter(freq !=0) |> 
+  group_by(year, local_authority) |> 
+  summarise(log_freq = log(sum(freq))) |> 
+  mutate(year = as.factor(year)) 
+
+log_raincloud_data |> 
+  ggplot(aes(x=year, y=log_freq))+
+  geom_boxplot(fill = "grey92",
+               width = 0.35,
+               outlier.shape = NA)+
+  
+  ## add half-violin from {ggdist} package
+  ggdist::stat_halfeye(
+    ## custom bandwidth
+    adjust = .5, 
+    ## adjust height
+    width = .6, 
+    ## move geom to the right
+    justification = -.2, 
+    ## remove slab interval
+    .width = 0, 
+    point_colour = NA
+  )+
+  
+  
+  geom_point(
+    size = 1.3,
+    alpha = .3,
+    position = position_jitter(
+      seed = 1, width = .1
+    )
+  ) + 
+  coord_cartesian(xlim = c(1.2, NA), clip = "off")+
+  labs(y = "log frequency")
+  
+
+```
+
+The data in figure @\ref{fig:log-raincloud-plot} was log-transformed.  The distributions  resembled gaussian envelopes. Apart from outliers notes with large log frequency values, there was an outlier with a log frequency value close to 0.  This outlier represented data from the Isles of Scilly.  It was noted that many values for the Isles of Scilly were not recorded (NA). Perhaps the low log frequency from this region was due to missing data.  For this reason, the Isles of Scilly data was dropped from  this analysis.  
+
+```{r log-mod-plot, fig.height=8, fig.cap="Raincloud plots for the three years 2012-14. The frequencies have been log transformed and the Isle of Scilly datapoints have been dropped. The distributions resemble gaussian envelopes."}
+#freq^(1/100) 
+log_rc_drop <-  
+    df_ccs_eng_collapse |> 
+  filter(freq !=0, local_authority != "Isles of Scilly") |> 
+  group_by(year, local_authority) |> 
+  summarise(log_freq = log(sum(freq))) |> 
+  mutate(year = as.factor(year)) 
+
+log_rc_drop |> 
+  ggplot(aes(x=year, y=log_freq))+
+  geom_boxplot(fill = "grey92",
+               width = 0.35,
+               outlier.shape = NA)+
+  
+  ## add half-violin from {ggdist} package
+  ggdist::stat_halfeye(
+    ## custom bandwidth
+    adjust = .5, 
+    ## adjust height
+    width = .6, 
+    ## move geom to the right
+    justification = -.2, 
+    ## remove slab interval
+    .width = 0, 
+    point_colour = NA
+  )+
+  
+  
+  geom_point(
+    size = 1.3,
+    alpha = .3,
+    position = position_jitter(
+      seed = 1, width = .1
+    )
+  ) + 
+  coord_cartesian(xlim = c(1.2, NA), clip = "off")+
+  labs(y = "log frequency")
+  
+
+```
+
+In figure @\ref{fig:log-mod-plot} removal of the Isle of Scilly datapoints resulted in distributions which resembled gaussian envelopes, although still slightly positively skewed. This would be in keeping with poission (count) data, where normally the output variable is log transformed in order to fit a linear model.
+
 ```{r agetypeyear, fig.height = 8, fig.cap="Deaths due to the three types of diseases investigated in England for age groups 30-34 and greater" }
 # remove age groups with low frequencies
 select_age <- summ_age_year_eng %>% 
